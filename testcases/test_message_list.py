@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from base.request_client import RequestClient
+from common.assertions import assert_response
 
 
 def test_message_list(case: Dict[str, Any], client: RequestClient) -> None:
@@ -28,6 +29,4 @@ def test_message_list(case: Dict[str, Any], client: RequestClient) -> None:
         data=case.get("data"),
     )
 
-    assert response.status_code == case.get("expected_status", 200)
-    body = response.json()
-    assert body.get("code") == case.get("expected_code", 200)
+    assert_response(case, response)

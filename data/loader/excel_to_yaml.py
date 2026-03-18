@@ -8,12 +8,13 @@ Excel → YAML 转换器：
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List, Optional
 import json
 
 import pandas as pd
 import yaml
 
+from config import settings
 
 def _parse_cell(value: Any) -> Any:
     """解析单元格内容，支持 JSON 字符串与空值清理。"""
@@ -51,6 +52,28 @@ def _normalize_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return records
 
 
+def export_sheet_to_yaml(
+    excel_path: Path, sheet_name: str, yaml_dir: Path, yaml_name: Optional[str] = None
+) -> Path:
+    """
+    仅导出指定 Sheet 为 YAML。
+
+    :param excel_path: Excel 文件路径
+    :param sheet_name: Sheet 名称
+    :param yaml_dir: YAML 输出目录
+    :param yaml_name: YAML 文件名（不含 .yaml），为空则使用 sheet_name
+    """
+    df = pd.read_excel(excel_path, sheet_name=sheet_name)
+    records = _normalize_records(df)
+    safe_name = (yaml_name or sheet_name).strip().replace(" ", "_")
+    out_path = yaml_dir / f"{safe_name}.yaml"
+    out_path.write_text(
+        yaml.safe_dump(records, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    return out_path
+
+
 def export_excel_to_yaml(excel_path: Path, yaml_dir: Path) -> List[Path]:
     """
     将 Excel 导出为 YAML：
@@ -78,7 +101,13 @@ def export_excel_to_yaml(excel_path: Path, yaml_dir: Path) -> List[Path]:
     for sheet_name, df in sheets.items():
         records = _normalize_records(df)
         safe_sheet = str(sheet_name).strip().replace(" ", "_")
-        out_path = yaml_dir / f"{excel_path.stem}__{safe_sheet}.yaml"
+
+        if settings.MULTI_SHEET_MODE.lower() == "excel_sheet":
+            file_name = f"{excel_path.stem}__{safe_sheet}"
+        else:
+            file_name = safe_sheet
+
+        out_path = yaml_dir / f"{file_name}.yaml"
         out_path.write_text(
             yaml.safe_dump(records, allow_unicode=True, sort_keys=False),
             encoding="utf-8",

@@ -7,7 +7,8 @@
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional, Tuple
+from urllib.parse import urljoin
 import json
 
 import requests
@@ -58,14 +59,14 @@ class AuthService:
         def _do_login() -> str:
             response = None
             try:
-                response = requests.request(
+                response = self.request_login(
+                    payload=settings.LOGIN_PAYLOAD,
+                    headers=settings.LOGIN_HEADERS,
                     method=settings.LOGIN_METHOD,
                     url=settings.LOGIN_URL,
-                    headers=settings.LOGIN_HEADERS,
-                    json=settings.LOGIN_PAYLOAD,
                     timeout=settings.REQUEST_TIMEOUT,
+                    raise_for_status=True,
                 )
-                response.raise_for_status()
                 try:
                     body = response.json()
                 except Exception as exc:
@@ -110,3 +111,47 @@ class AuthService:
             )
         except Exception:
             return
+
+    def request_login(
+        self,
+        payload: Optional[Any] = None,
+        headers: Optional[dict] = None,
+        method: Optional[str] = None,
+        url: Optional[str] = None,
+        timeout: Optional[float] = None,
+        raise_for_status: bool = False,
+    ) -> requests.Response:
+        """
+        发起登录请求（用于登录测试或自定义登录流程）。
+
+        :param payload: 请求体（dict/list 走 json，其他走 data）
+        :param headers: 自定义 headers
+        :param method: HTTP 方法
+        :param url: 登录 URL
+        :param timeout: 超时
+        :param raise_for_status: 是否抛出 HTTP 错误
+        """
+        req_method = (method or settings.LOGIN_METHOD).upper()
+        req_url = url or settings.LOGIN_URL
+        if not str(req_url).lower().startswith(("http://", "https://")):
+            base = settings.BASE_URL.rstrip("/") + "/"
+            req_url = urljoin(base, str(req_url).lstrip("/"))
+        req_headers = headers or settings.LOGIN_HEADERS
+        req_timeout = timeout or settings.REQUEST_TIMEOUT
+
+        kwargs: dict = {
+            "method": req_method,
+            "url": req_url,
+            "headers": req_headers,
+            "timeout": req_timeout,
+        }
+        if payload is not None:
+            if isinstance(payload, (dict, list)):
+                kwargs["json"] = payload
+            else:
+                kwargs["data"] = payload
+
+        response = requests.request(**kwargs)
+        if raise_for_status:
+            response.raise_for_status()
+        return response

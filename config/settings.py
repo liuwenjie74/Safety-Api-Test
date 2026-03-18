@@ -15,7 +15,7 @@ import os
 BASE_DIR = Path(__file__).resolve().parents[1]
 
 
-def _load_env_file(path: Path) -> None:
+def _load_env_file(path: Path, override: bool = False) -> None:
     """从 .env 文件加载环境变量（若存在）。"""
     if not path.exists():
         return
@@ -26,11 +26,15 @@ def _load_env_file(path: Path) -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
+        if not key:
+            continue
+        if override or key not in os.environ:
             os.environ[key] = value
 
 
-_load_env_file(BASE_DIR / ".env")
+_load_env_file(BASE_DIR / ".env", override=False)
+ENV: str = os.getenv("ENV", "dev")
+_load_env_file(BASE_DIR / f".env.{ENV}", override=True)
 
 
 def _get_env_json(name: str, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -91,6 +95,11 @@ REQUEST_TIMEOUT: float = _get_env_float("REQUEST_TIMEOUT", 15.0)
 DATA_DIR = BASE_DIR / "data"
 EXCEL_DIR = DATA_DIR / "excel"
 YAML_DIR = DATA_DIR / "yaml"
+
+# 多 Sheet 映射策略：
+# - sheet: YAML 文件名 = Sheet 名称（推荐，多模块映射）
+# - excel_sheet: YAML 文件名 = <Excel>__<Sheet>
+MULTI_SHEET_MODE: str = _get_env_str("MULTI_SHEET_MODE", "sheet")
 
 # 日志脱敏
 MASK_TOKEN_VISIBLE: int = int(os.getenv("MASK_TOKEN_VISIBLE", "4"))

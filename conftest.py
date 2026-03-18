@@ -8,7 +8,7 @@ Pytest 全局配置：
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List
+from typing import Any, Iterable, List
 import json
 
 import pytest
@@ -35,19 +35,25 @@ def session_context() -> SessionContext:
     return SessionContext()
 
 
+@pytest.fixture(scope="session")
+def auth_service() -> AuthService:
+    """登录服务实例。"""
+    return AuthService()
+
+
 @pytest.fixture(scope="session", autouse=True)
-def session_login(session_context: SessionContext) -> None:
+def session_login(session_context: SessionContext, auth_service: AuthService) -> None:
     """
     Session 级别登录，只执行一次。
     禁止在 import 阶段调用。
     """
-    AuthService().login(session_context)
+    auth_service.login(session_context)
 
 
 @pytest.fixture(scope="session")
-def client(session_context: SessionContext) -> Iterable[RequestClient]:
+def client(session_context: SessionContext, auth_service: AuthService) -> Iterable[RequestClient]:
     """注入 RequestClient。"""
-    c = RequestClient(context=session_context)
+    c = RequestClient(context=session_context, auth_service=auth_service, max_retry_401=1)
     yield c
     c.close()
 
@@ -59,6 +65,14 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """
     argnames = list(metafunc.fixturenames)
     if not argnames:
+        return
+
+    param_name = None
+    if "case" in argnames:
+        param_name = "case"
+    elif "data" in argnames:
+        param_name = "data"
+    else:
         return
 
     yaml_path = ensure_yaml_for_test(metafunc.function.__name__)
@@ -77,20 +91,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             case_id = item.get("id") or item.get("name")
         ids.append(str(case_id) if case_id else f"case_{idx}")
 
-        if len(argnames) == 1:
-            values.append(item)
-        else:
-            if isinstance(item, dict):
-                values.append(tuple(item.get(name) for name in argnames))
-            elif isinstance(item, (list, tuple)):
-                values.append(tuple(item))
-            else:
-                raise RuntimeError(f"非法用例数据：{yaml_path} 第 {idx} 条")
+        values.append(item)
 
-    if len(argnames) == 1:
-        metafunc.parametrize(argnames[0], values, ids=ids)
-    else:
-        metafunc.parametrize(argnames, values, ids=ids)
+    metafunc.parametrize(param_name, values, ids=ids)
 
 
 @pytest.hookimpl(hookwrapper=True)

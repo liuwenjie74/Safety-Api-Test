@@ -26,6 +26,7 @@ DEFAULT_COLUMNS: List[str] = [
     "expected_status",
     "expected_code",
     "asserts",
+    "use_settings_login",
 ]
 
 

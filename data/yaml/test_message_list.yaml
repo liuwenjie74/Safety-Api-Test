@@ -8,3 +8,9 @@
     endTime: '2026-03-30 23:59:59'
   expected_status: 200
   expected_code: 200
+  asserts:
+  - type: status_code
+    expected: 200
+  - type: json_path_eq
+    path: code
+    expected: 200

@@ -185,7 +185,7 @@ allure serve allure-results
 
 用例只关心断言，不关心登录。
 
-## 12. CI/CD Pipeline（GitHub Actions）
+## 13. CI/CD Pipeline（GitHub Actions）
 已提供完整配置文件：
 ```
 .github/workflows/ci.yml
