@@ -50,9 +50,9 @@ def generate_excel_template(
 
 def generate_default_template() -> Path:
     """
-    在 data/excel 下生成默认模板文件：template.xlsx
+    在 data/excel 下生成默认模板文件：api_cases.xlsx
     """
-    return generate_excel_template(settings.EXCEL_DIR / "template.xlsx")
+    return generate_excel_template(settings.EXCEL_DIR / settings.EXCEL_MAIN)
 
 
 if __name__ == "__main__":
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--path",
         type=str,
-        default=str(settings.EXCEL_DIR / "template.xlsx"),
+        default=str(settings.EXCEL_DIR / settings.EXCEL_MAIN),
         help="模板输出路径",
     )
     parser.add_argument("--sheet", type=str, default="cases", help="Sheet 名称")

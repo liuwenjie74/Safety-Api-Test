@@ -47,9 +47,28 @@ def _normalize_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
             parsed = _parse_cell(val)
             if parsed is not None:
                 item[str(col).strip()] = parsed
+        _auto_build_asserts(item)
         if item:
             records.append(item)
     return records
+
+
+def _auto_build_asserts(item: Dict[str, Any]) -> None:
+    """
+    自动生成断言：
+    - 如果 asserts 未配置且 expected_status/expected_code 存在，则生成默认断言。
+    """
+    if "asserts" in item:
+        return
+
+    rules: List[Dict[str, Any]] = []
+    if "expected_status" in item:
+        rules.append({"type": "status_code", "expected": item.get("expected_status")})
+    if "expected_code" in item:
+        rules.append({"type": "json_path_eq", "path": "code", "expected": item.get("expected_code")})
+
+    if rules:
+        item["asserts"] = rules
 
 
 def export_sheet_to_yaml(

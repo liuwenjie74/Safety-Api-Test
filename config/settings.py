@@ -96,6 +96,9 @@ DATA_DIR = BASE_DIR / "data"
 EXCEL_DIR = DATA_DIR / "excel"
 YAML_DIR = DATA_DIR / "yaml"
 
+# 唯一 Excel 文件（多 Sheet 模式）
+EXCEL_MAIN: str = _get_env_str("EXCEL_MAIN", "api_cases.xlsx")
+
 # 多 Sheet 映射策略：
 # - sheet: YAML 文件名 = Sheet 名称（推荐，多模块映射）
 # - excel_sheet: YAML 文件名 = <Excel>__<Sheet>

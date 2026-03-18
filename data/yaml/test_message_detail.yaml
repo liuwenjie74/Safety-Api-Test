@@ -1,0 +1,12 @@
+- id: detail_001
+  name: ??????
+  method: GET
+  url: /api/message/index/2267
+  expected_status: 200
+  expected_code: 200
+  asserts:
+  - type: status_code
+    expected: 200
+  - type: json_path_eq
+    path: code
+    expected: 200
