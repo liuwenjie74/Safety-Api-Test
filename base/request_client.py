@@ -1,26 +1,21 @@
 # -*- coding: utf-8 -*-
-"""
-Requests 二次封装：
-- 自动注入 Token（来自 SessionContext）；
-- 失败时自动附加请求/响应到 Allure；
-- 维护最后一次请求/响应快照用于失败分析。
-"""
+"""Requests facade with automatic token injection and 401 retry support."""
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+from urllib.parse import urljoin
 import json
 import threading
-from urllib.parse import urljoin
 
 import requests
 
-from config import settings
-from common.context import SessionContext, RequestSnapshot, ResponseSnapshot
-from common.logger import get_logger, mask_headers
 from common.auth import AuthService
+from common.context import RequestSnapshot, ResponseSnapshot, SessionContext
+from common.logger import get_logger, mask_headers
+from config import settings
 
 
-def _safe_import_allure():
+def _safe_import_allure() -> Optional[Any]:
     try:
         import allure  # type: ignore
 
@@ -30,7 +25,7 @@ def _safe_import_allure():
 
 
 class RequestClient:
-    """HTTP 请求客户端（自动携带 Token）。"""
+    """HTTP client that automatically injects the current session token."""
 
     _refresh_lock = threading.Lock()
 
@@ -57,21 +52,17 @@ class RequestClient:
         self._logger = get_logger(self.__class__.__name__)
 
     def request(self, method: str, url: str, **kwargs: Any) -> requests.Response:
-        """
-        发送请求并自动注入 Token。
-
-        :param method: HTTP 方法
-        :param url: 绝对或相对路径
-        :param kwargs: 原生 requests 参数
-        """
+        """Send a request, inject the token, and retry once on 401 if enabled."""
         full_url = self._join_url(url)
         base_kwargs = dict(kwargs)
         base_kwargs.setdefault("timeout", self._timeout)
 
         retries = 0
         while True:
+            stale_token = self._context.get_token()
             headers = dict(base_kwargs.get("headers") or {})
-            self._inject_token(headers)
+            self._inject_token(headers, stale_token)
+
             attempt_kwargs = dict(base_kwargs)
             attempt_kwargs["headers"] = headers
 
@@ -99,8 +90,8 @@ class RequestClient:
                     and retries < self._max_retry_401
                     and self._is_replayable(base_kwargs)
                 ):
-                    self._logger.warning("检测到 401，执行 Token 刷新并重试。")
-                    self._refresh_token()
+                    self._logger.warning("Received 401, refreshing token and retrying request.")
+                    self._refresh_token(stale_token)
                     retries += 1
                     continue
 
@@ -114,37 +105,44 @@ class RequestClient:
                 raise
 
     def get(self, url: str, **kwargs: Any) -> requests.Response:
-        """GET 请求。"""
+        """Send a GET request."""
         return self.request("GET", url, **kwargs)
 
     def post(self, url: str, **kwargs: Any) -> requests.Response:
-        """POST 请求。"""
+        """Send a POST request."""
         return self.request("POST", url, **kwargs)
 
     def close(self) -> None:
-        """关闭底层 Session。"""
+        """Close the underlying session."""
         self._session.close()
-
-    # ------------------------- 内部方法 -------------------------
 
     def _join_url(self, url: str) -> str:
         if url.lower().startswith(("http://", "https://")):
             return url
         return urljoin(self._base_url.rstrip("/") + "/", url.lstrip("/"))
 
-    def _inject_token(self, headers: Dict[str, Any]) -> None:
-        token = self._context.get_token()
+    def _inject_token(self, headers: Dict[str, Any], token: Optional[str]) -> None:
         if not token:
-            self._logger.warning("Token 未初始化，当前请求不携带 Token。")
+            self._logger.warning("Token is not initialized; request will be sent without it.")
             return
-        value = f"{self._token_prefix}{token}" if self._token_prefix else token
-        headers[self._token_header] = value
+        headers[self._token_header] = (
+            f"{self._token_prefix}{token}" if self._token_prefix else token
+        )
 
-    def _refresh_token(self) -> None:
-        """401 时刷新 Token（Session 级锁防止并发风暴）。"""
+    def _refresh_token(self, stale_token: Optional[str]) -> None:
+        """
+        Refresh the token after a 401 response.
+
+        If another thread has already replaced the token while the current thread
+        was waiting on the refresh lock, the second login is skipped.
+        """
         if self._auth_service is None:
             return
+
         with self._refresh_lock:
+            current_token = self._context.get_token()
+            if current_token and current_token != stale_token:
+                return
             self._auth_service.login(self._context)
 
     def _safe_response_body(self, response: requests.Response) -> Any:
@@ -157,6 +155,7 @@ class RequestClient:
         allure = _safe_import_allure()
         if allure is None:
             return
+
         allure.attach(
             json.dumps(req.__dict__, ensure_ascii=False, indent=4, default=str),
             name="request_on_fail",
@@ -172,6 +171,7 @@ class RequestClient:
         allure = _safe_import_allure()
         if allure is None:
             return
+
         allure.attach(
             json.dumps(req.__dict__, ensure_ascii=False, indent=4, default=str),
             name="request_on_exception",
@@ -184,7 +184,7 @@ class RequestClient:
         )
 
     def _safe_value(self, value: Any) -> Any:
-        """将不可序列化对象转换为字符串，避免附件序列化失败。"""
+        """Convert non-serializable values into readable strings."""
         if value is None:
             return None
         if isinstance(value, (str, int, float, bool, dict, list)):
@@ -197,9 +197,10 @@ class RequestClient:
         return repr(value)
 
     def _is_replayable(self, base_kwargs: Dict[str, Any]) -> bool:
-        """判断请求体是否可重放。"""
+        """Return whether the request body can be safely replayed."""
         if base_kwargs.get("files") is not None:
             return False
+
         data = base_kwargs.get("data")
         if data is None:
             return True

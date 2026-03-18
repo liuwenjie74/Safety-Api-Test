@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
-"""
-全局配置模块：
-- 支持 .env 环境变量加载；
-- 提供登录与路径等核心配置。
-"""
+"""Project settings loaded from ``.env`` and ``.env.<ENV>`` files."""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import urljoin
 import json
 import os
 
@@ -16,39 +13,23 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 
 
 def _load_env_file(path: Path, override: bool = False) -> None:
-    """从 .env 文件加载环境变量（若存在）。"""
+    """Load environment variables from a dotenv-style file if it exists."""
     if not path.exists():
         return
-    for line in path.read_text(encoding="utf-8").splitlines():
+
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
+
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
         if not key:
             continue
+
         if override or key not in os.environ:
             os.environ[key] = value
-
-
-_load_env_file(BASE_DIR / ".env", override=False)
-ENV: str = os.getenv("ENV", "dev")
-_load_env_file(BASE_DIR / f".env.{ENV}", override=True)
-
-
-def _get_env_json(name: str, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """读取 JSON 格式环境变量，失败时回退默认值。"""
-    raw = os.getenv(name)
-    if not raw:
-        return default or {}
-    try:
-        data = json.loads(raw)
-        if isinstance(data, dict):
-            return data
-    except Exception:
-        pass
-    return default or {}
 
 
 def _get_env_str(name: str, default: str) -> str:
@@ -66,14 +47,36 @@ def _get_env_float(name: str, default: float) -> float:
         return default
 
 
-# 基础服务配置
-BASE_URL: str = _get_env_str("BASE_URL", "http://test.lenszl.cn:30275")
+def _get_env_json(name: str, default: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Read a JSON dictionary from environment variables."""
+    raw = os.getenv(name)
+    if not raw:
+        return default or {}
 
-# 登录接口配置（按接口文档默认值）
-LOGIN_URL: str = _get_env_str("LOGIN_URL", f"{BASE_URL}/api/common/sys/login")
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return default or {}
+
+    return data if isinstance(data, dict) else (default or {})
+
+
+def _build_url(base_url: str, path: str) -> str:
+    """Join a base URL and path while tolerating trailing slashes."""
+    return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
+
+
+_load_env_file(BASE_DIR / ".env", override=False)
+ENV: str = os.getenv("ENV", "dev")
+_load_env_file(BASE_DIR / f".env.{ENV}", override=True)
+
+
+BASE_URL: str = _get_env_str("BASE_URL", "http://test.lenszl.cn:30275")
+LOGIN_URL: str = _get_env_str("LOGIN_URL", _build_url(BASE_URL, "api/common/sys/login"))
 LOGIN_METHOD: str = _get_env_str("LOGIN_METHOD", "POST")
 LOGIN_HEADERS: Dict[str, Any] = _get_env_json(
-    "LOGIN_HEADERS", {"Content-Type": "application/json"}
+    "LOGIN_HEADERS",
+    {"Content-Type": "application/json"},
 )
 LOGIN_PAYLOAD: Dict[str, Any] = _get_env_json(
     "LOGIN_PAYLOAD",
@@ -83,26 +86,14 @@ LOGIN_PAYLOAD: Dict[str, Any] = _get_env_json(
     },
 )
 
-# Token 提取路径（response.data）
 TOKEN_PATH: str = _get_env_str("TOKEN_PATH", "data")
 TOKEN_HEADER: str = _get_env_str("TOKEN_HEADER", "token")
 TOKEN_PREFIX: str = _get_env_str("TOKEN_PREFIX", "")
-
-# 请求超时
 REQUEST_TIMEOUT: float = _get_env_float("REQUEST_TIMEOUT", 15.0)
 
-# 数据目录
 DATA_DIR = BASE_DIR / "data"
 EXCEL_DIR = DATA_DIR / "excel"
 YAML_DIR = DATA_DIR / "yaml"
-
-# 唯一 Excel 文件（多 Sheet 模式）
 EXCEL_MAIN: str = _get_env_str("EXCEL_MAIN", "api_cases.xlsx")
 
-# 多 Sheet 映射策略：
-# - sheet: YAML 文件名 = Sheet 名称（推荐，多模块映射）
-# - excel_sheet: YAML 文件名 = <Excel>__<Sheet>
-MULTI_SHEET_MODE: str = _get_env_str("MULTI_SHEET_MODE", "sheet")
-
-# 日志脱敏
 MASK_TOKEN_VISIBLE: int = int(os.getenv("MASK_TOKEN_VISIBLE", "4"))

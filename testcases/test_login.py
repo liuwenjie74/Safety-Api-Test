@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-登录接口测试：
-- 使用 AuthService 直接发起登录请求；
-- 支持从 Excel/YAML 驱动断言。
+Auto-generated testcase: test_login
+- Data source: data/yaml/test_login.yaml
 """
 from __future__ import annotations
 
@@ -22,10 +21,7 @@ def _as_bool(value: Any) -> bool:
 
 
 def test_login(case: Dict[str, Any], auth_service: AuthService) -> None:
-    """
-    登录接口测试示例：
-    - case 来自 data/yaml/test_login.yaml
-    """
+    """Run the login testcase without affecting the session login fixture."""
     use_settings = _as_bool(case.get("use_settings_login", True))
     method = case.get("method", settings.LOGIN_METHOD)
     url = case.get("url", settings.LOGIN_URL)

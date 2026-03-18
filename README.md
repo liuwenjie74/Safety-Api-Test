@@ -1,13 +1,17 @@
-# 企业级接口自动化测试框架
+﻿# 企业级接口自动化测试框架
 
-本项目基于 `Pytest + Requests + Allure`，用于企业级接口自动化测试。框架核心目标是：
+本项目基于 `Pytest + Requests + Allure`，用于企业级接口自动化测试。
 
-- Excel 作为唯一数据源
-- YAML 作为运行时数据格式
-- 登录态自动管理，测试用例不关心 Token
-- 支持按 Sheet 自动生成 YAML 和测试脚本
+框架目标：
 
-## 1. 如何运行
+- 只维护一个 Excel 数据源：`data/excel/api_cases.xlsx`
+- 每个 Sheet 自动映射为一个 YAML 文件和一个测试脚本
+- 登录只在 Session 级执行一次
+- 普通测试用例不关心 Token 的获取和传递
+- 支持 401 自动刷新 Token
+- 支持 Allure 报告与失败快照自动挂载
+
+## 1. 环境准备
 
 ### 1.1 安装依赖
 
@@ -15,130 +19,265 @@
 pip install -r requirements.txt
 ```
 
-### 1.2 运行测试
+### 1.2 安装 Allure 命令行
+
+请先安装 Allure Commandline，并确保 `allure` 已加入系统 `PATH`。
+
+安装完成后，可以验证：
 
 ```bash
+allure --version
+```
+
+## 2. 环境切换说明
+
+框架支持多环境切换，配置加载顺序如下：
+
+1. 先加载根目录下的 `.env`
+2. 再加载 `.env.<ENV>`，后者会覆盖前者中的同名配置
+
+示例：
+
+- `ENV=dev` 时，加载 `.env` + `.env.dev`
+- `ENV=prod` 时，加载 `.env` + `.env.prod`
+
+### 2.1 推荐配置文件
+
+建议按下面方式维护环境配置：
+
+- `.env`：公共配置或本地默认配置
+- `.env.dev`：测试环境配置
+- `.env.prod`：生产环境配置
+
+项目已提供以下示例文件：
+
+- `.env.example`
+- `.env.dev.example`
+- `.env.prod.example`
+
+可复制后自行修改：
+
+```powershell
+Copy-Item .env.dev.example .env.dev
+Copy-Item .env.prod.example .env.prod
+```
+
+### 2.2 当前环境示例
+
+测试环境示例：
+
+```env
+BASE_URL=http://test.lenszl.cn:30275
+LOGIN_URL=http://test.lenszl.cn:30275/api/common/sys/login
+```
+
+生产环境示例：
+
+```env
+BASE_URL=https://jdz.lenszl.cn
+LOGIN_URL=https://jdz.lenszl.cn/api/common/sys/login
+```
+
+说明：
+
+- 如果生产环境登录路径不是 `/api/common/sys/login`，只需要修改 `LOGIN_URL`
+- 当前脚本已经兼容 `BASE_URL` 带不带结尾 `/`
+
+### 2.3 如何切换环境
+
+方式一：使用 `Makefile`
+
+```bash
+make test ENV=dev
+make test ENV=prod
+```
+
+方式二：使用 Python 任务脚本
+
+```bash
+python tools/task_runner.py test --env dev
+python tools/task_runner.py test --env prod
+```
+
+方式三：直接设置环境变量后运行 Pytest
+
+```powershell
+$env:ENV = "prod"
 pytest -q
 ```
 
-### 1.3 生成 Allure 报告
+## 3. 唯一 Excel 规则
 
-最推荐的使用方式：
-
-```bash
-pytest -q --alluredir=allure-results --clean-alluredir
-allure generate allure-results -o allure-report --clean
-allure open allure-report
-```
-
-这组命令的含义是：
-
-- 第 1 条：执行测试并重新生成干净的 Allure 原始结果
-- 第 2 条：把原始结果生成为静态 HTML 报告
-- 第 3 条：打开静态报告
-
-如果只是临时查看一次报告，也可以使用：
-
-```bash
-pytest -q --alluredir=allure-results
-allure serve allure-results
-```
-
-注意：
-
-- `allure serve allure-results` 会启动一个临时服务并自动打开报告
-- 这种方式适合临时查看，但不会把最终报告固定输出到 `allure-report`
-- 如果需要留档、发给别人或反复打开，优先使用上面的“最推荐的使用方式”
-
-Allure 原始结果目录：
-
-```text
-E:\Python\Safety-Api-Test\allure-results
-```
-
-如果需要单独生成静态 HTML 报告：
-
-```bash
-allure generate allure-results -o allure-report --clean
-```
-
-静态报告目录：
-
-```text
-E:\Python\Safety-Api-Test\allure-report
-```
-
-静态报告推荐打开方式：
-
-```bash
-allure open allure-report
-```
-
-## 2. 唯一 Excel 规则
-
-当前框架只允许一个 Excel 数据文件：
+当前框架只允许维护一个 Excel 数据源：
 
 ```text
 data/excel/api_cases.xlsx
 ```
 
-所有接口测试数据都必须维护在这个文件中，不再拆分成多个 Excel。
+规则如下：
 
-每个接口或测试模块使用一个独立 Sheet。
-
-## 3. 多 Sheet 映射规则
-
-映射规则如下：
-
+- 所有接口测试数据都维护在这一份 Excel 中
+- 每个接口或测试模块使用一个独立 Sheet
 - Sheet 名必须以 `test_` 开头
-- Sheet 名等于测试函数名
-- Sheet 名同时也是 YAML 文件名
+- Sheet 名必须与测试函数名完全一致
+- 生成器会根据 Sheet 自动生成 YAML 和测试脚本
 
-例如 `api_cases.xlsx` 中有以下 Sheet：
+不要再拆分成多个 Excel 文件，否则会破坏当前自动映射规则。
+
+## 4. 多 Sheet 映射规则
+
+假设 `api_cases.xlsx` 中有下面这些 Sheet：
 
 - `test_login`
 - `test_message_list`
 - `test_message_detail`
 
-对应关系为：
+则自动映射关系如下：
 
-- `test_login` -> `testcases/test_login.py` -> `data/yaml/test_login.yaml`
-- `test_message_list` -> `testcases/test_message_list.py` -> `data/yaml/test_message_list.yaml`
-- `test_message_detail` -> `testcases/test_message_detail.py` -> `data/yaml/test_message_detail.yaml`
+- `test_login` -> `data/yaml/test_login.yaml` -> `testcases/test_login.py`
+- `test_message_list` -> `data/yaml/test_message_list.yaml` -> `testcases/test_message_list.py`
+- `test_message_detail` -> `data/yaml/test_message_detail.yaml` -> `testcases/test_message_detail.py`
 
-## 4. 自动生成命令
+说明：
 
-根据 `api_cases.xlsx` 中的 Sheet 自动生成测试脚本和 YAML：
+- `data/yaml/*.yaml` 是运行时数据文件
+- `testcases/test_*.py` 是自动生成的测试脚本
+- 自动生成的文件可能被重新覆盖，因此不要手工修改
 
-```bash
-python -m data.loader.test_generator
-```
+## 5. 自动生成命令
 
-如果需要覆盖已存在的测试脚本：
+### 5.1 根据 Excel 生成 YAML 和测试脚本
 
 ```bash
 python -m data.loader.test_generator --force
 ```
 
-生成器会自动处理两类文件：
+或者：
 
-- `testcases/test_xxx.py`
-- `data/yaml/test_xxx.yaml`
+```bash
+make generate ENV=dev
+```
 
-## 5. 断言模板化规则
+说明：
 
-在 Excel 中可以使用 `asserts` 列定义断言模板，内容为 JSON 数组。
+- `--force` 表示覆盖已有的自动生成脚本
+- 修改了 `api_cases.xlsx` 后，建议重新执行一次生成命令
+
+### 5.2 统一任务脚本
+
+项目新增统一任务脚本：`tools/task_runner.py`
+
+支持的命令如下：
+
+- `generate`：生成 YAML 和测试脚本
+- `test`：先生成，再运行 Pytest
+- `allure`：先生成，再执行带 `allure-results` 的测试
+- `report`：先生成，再运行测试，并生成静态 Allure 报告
+- `open`：打开静态 Allure 报告
+- `serve`：启动临时 Allure 报告服务
+- `ci`：执行生成 + 测试 + 生成静态报告
+
+示例：
+
+```bash
+python tools/task_runner.py report --env prod
+```
+
+## 6. 如何运行测试
+
+推荐方式：
+
+```bash
+make test ENV=dev
+```
+
+如果本机没有 `make`，可以直接执行：
+
+```bash
+python tools/task_runner.py test --env dev
+```
+
+## 7. Allure 报告说明
+
+### 7.1 最推荐的使用方式
+
+```bash
+make report ENV=dev
+```
+
+等价于：
+
+```bash
+python tools/task_runner.py report --env dev
+```
+
+这个命令会自动执行以下步骤：
+
+1. 根据 Excel 重新生成 YAML 和测试脚本
+2. 运行 Pytest 并输出 `allure-results`
+3. 生成静态报告到 `allure-report`
+
+### 7.2 报告目录
+
+Allure 原始结果目录：
+
+```text
+allure-results
+```
+
+Allure 静态报告目录：
+
+```text
+allure-report
+```
+
+### 7.3 如何打开报告
+
+打开静态报告：
+
+```bash
+make open-allure ENV=dev
+```
+
+或者：
+
+```bash
+python tools/task_runner.py open --env dev
+```
+
+启动临时报告服务：
+
+```bash
+make serve-allure ENV=dev
+```
+
+或者：
+
+```bash
+python tools/task_runner.py serve --env dev
+```
+
+说明：
+
+- `allure-results` 是原始结果目录
+- `allure-report` 是静态 HTML 报告目录
+- 推荐优先使用静态报告，便于留档和分享
+
+## 8. 断言模板化规则
+
+你可以在 Excel 的 `asserts` 列中配置断言规则，内容格式为 JSON 数组。
 
 示例：
 
 ```json
 [
   {"type": "status_code", "expected": 200},
-  {"type": "json_path_eq", "path": "code", "expected": 200}
+  {"type": "json_path_eq", "path": "code", "expected": 0},
+  {"type": "exists", "path": "data"}
 ]
 ```
 
-目前支持的断言类型：
+当前支持的断言类型：
 
 - `status_code`
 - `json_path_eq`
@@ -150,46 +289,53 @@ python -m data.loader.test_generator --force
 - `length_eq`
 - `body_contains`
 
-如果 `asserts` 为空，框架会自动根据以下字段补全默认断言：
+### 8.1 默认断言生成规则
+
+如果 `asserts` 为空，框架会根据下面两个字段自动补全默认断言：
 
 - `expected_status`
 - `expected_code`
 
-也就是说，只填这两个字段，也可以直接运行。
+例如：
 
-## 6. Excel 字段建议
+- `expected_status=200`
+- `expected_code=0`
 
-推荐在 Sheet 中使用这些列：
+则会自动生成类似下面的断言：
+
+```json
+[
+  {"type": "status_code", "expected": 200},
+  {"type": "json_path_eq", "path": "code", "expected": 0}
+]
+```
+
+## 9. Excel 字段建议
+
+推荐每个 Sheet 使用下面这些列：
 
 | 列名 | 说明 |
 | --- | --- |
 | `id` | 用例编号 |
 | `name` | 用例名称 |
 | `method` | 请求方法，如 `GET`、`POST` |
-| `url` | 接口路径，推荐写相对路径 |
+| `url` | 接口路径，推荐使用相对路径 |
 | `headers` | 请求头，JSON 字符串 |
-| `params` | 查询参数，JSON 字符串 |
+| `params` | Query 参数，JSON 字符串 |
 | `json` | JSON 请求体，JSON 字符串 |
 | `data` | 表单或纯文本请求体 |
 | `expected_status` | 期望 HTTP 状态码 |
 | `expected_code` | 期望业务码 |
-| `asserts` | 断言模板，JSON 数组 |
-| `use_settings_login` | 登录接口测试时，是否直接使用配置文件中的账号密码 |
+| `asserts` | 断言规则，JSON 数组 |
+| `use_settings_login` | 登录测试是否直接使用配置文件中的账号密码 |
 
-## 7. 新接口添加示例
+## 10. 新接口添加示例
 
-假设新增接口：
+假设你要新增下面这个接口：
 
 ```text
 GET /api/message/index/2267
 ```
-
-返回体中关注：
-
-- HTTP 状态码为 `200`
-- 业务字段 `code` 为 `200`
-
-添加步骤如下。
 
 ### 第 1 步：在 Excel 中新增 Sheet
 
@@ -199,15 +345,15 @@ GET /api/message/index/2267
 data/excel/api_cases.xlsx
 ```
 
-新增一个 Sheet，名称为：
+新增一个 Sheet，命名为：
 
 ```text
 test_message_detail
 ```
 
-### 第 2 步：填写一条测试数据
+### 第 2 步：在 Sheet 中新增一条数据
 
-示例数据如下：
+你可以填写如下内容：
 
 | 列名 | 示例值 |
 | --- | --- |
@@ -216,15 +362,22 @@ test_message_detail
 | `method` | `GET` |
 | `url` | `/api/message/index/2267` |
 | `expected_status` | `200` |
-| `expected_code` | `200` |
-| `asserts` | `[{"type":"status_code","expected":200},{"type":"json_path_eq","path":"code","expected":200}]` |
+| `expected_code` | `0` |
+| `asserts` | `[{"type":"status_code","expected":200},{"type":"json_path_eq","path":"code","expected":0},{"type":"exists","path":"data.list"}]` |
 
 注意：
 
-- 不需要填写 Token
-- Token 会由框架自动登录并注入请求头
+- 不要在 Excel 中维护 Token
+- 框架会自动登录并把 Token 注入请求头
+- 如果接口只需要通用请求逻辑，不需要手写测试脚本
 
-### 第 3 步：自动生成 YAML 和测试脚本
+### 第 3 步：生成 YAML 和测试脚本
+
+```bash
+make generate ENV=dev
+```
+
+或者：
 
 ```bash
 python -m data.loader.test_generator --force
@@ -233,14 +386,16 @@ python -m data.loader.test_generator --force
 ### 第 4 步：执行测试
 
 ```bash
-pytest -q
+make test ENV=dev
 ```
 
-## 8. 当前工作方式总结
+## 11. 日常推荐工作流
 
-日常使用时，只需要记住这几个动作：
+推荐按下面顺序操作：
 
-1. 在 `data/excel/api_cases.xlsx` 中维护或新增 Sheet
-2. 运行 `python -m data.loader.test_generator --force`
-3. 运行 `pytest -q`
-4. 需要报告时运行 Allure 命令
+1. 编辑 `data/excel/api_cases.xlsx`
+2. 执行 `make generate ENV=dev`
+3. 执行 `make test ENV=dev`
+4. 需要报告时执行 `make report ENV=dev`
+
+如果你要切换生产环境，只需要把命令中的 `ENV=dev` 改成 `ENV=prod`。

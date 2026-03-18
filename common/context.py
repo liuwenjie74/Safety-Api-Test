@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-会话上下文：
-- 负责保存与获取 Token；
-- 避免使用全局变量；
-- 线程安全。
-"""
+"""Session-scoped context for token storage and request snapshots."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,7 +9,7 @@ import threading
 
 @dataclass
 class RequestSnapshot:
-    """请求快照（用于失败时附件）。"""
+    """Serializable request data used for failure attachments."""
 
     method: str
     url: str
@@ -26,7 +21,7 @@ class RequestSnapshot:
 
 @dataclass
 class ResponseSnapshot:
-    """响应快照（用于失败时附件）。"""
+    """Serializable response data used for failure attachments."""
 
     status_code: int
     headers: Dict[str, Any]
@@ -34,46 +29,42 @@ class ResponseSnapshot:
 
 
 class SessionContext:
-    """
-    会话上下文（Session 级别）：
-    - 保存 Token；
-    - 保存最近一次请求与响应快照。
-    """
+    """Thread-safe session context shared by all testcases."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._store: Dict[str, Any] = {}
 
     def set_token(self, token: str) -> None:
-        """保存 Token。"""
+        """Store the current token."""
         with self._lock:
             self._store["token"] = token
 
     def get_token(self) -> Optional[str]:
-        """获取 Token。"""
+        """Return the current token if it exists."""
         with self._lock:
             return self._store.get("token")
 
     def clear_token(self) -> None:
-        """清理 Token。"""
+        """Clear the current token."""
         with self._lock:
             self._store.pop("token", None)
 
     def set_last_snapshot(
-        self, request: RequestSnapshot, response: Optional[ResponseSnapshot]
+        self,
+        request: RequestSnapshot,
+        response: Optional[ResponseSnapshot],
     ) -> None:
-        """保存最近一次请求/响应快照。"""
+        """Store the latest request and response snapshots."""
         with self._lock:
             self._store["last_request"] = request
             self._store["last_response"] = response
 
-    def get_last_snapshot(
-        self,
-    ) -> Optional[Dict[str, Any]]:
-        """获取最近一次请求/响应快照。"""
+    def get_last_snapshot(self) -> Optional[Dict[str, Any]]:
+        """Return the latest request and response snapshots."""
         with self._lock:
-            req = self._store.get("last_request")
-            resp = self._store.get("last_response")
-            if not req:
+            request = self._store.get("last_request")
+            response = self._store.get("last_response")
+            if not request:
                 return None
-            return {"request": req, "response": resp}
+            return {"request": request, "response": response}

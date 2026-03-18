@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-示例用例：消息详情查询
-- 数据来自 api_cases.xlsx 的 Sheet: test_message_detail
-- 不感知登录与 Token 传递。
+Auto-generated testcase: test_message_detail
+- Data source: data/yaml/test_message_detail.yaml
 """
 from __future__ import annotations
 
@@ -13,10 +12,7 @@ from common.assertions import assert_response
 
 
 def test_message_detail(case: Dict[str, Any], client: RequestClient) -> None:
-    """
-    YAML 驱动的测试用例示例：
-    - case 来自 data/yaml/test_message_detail.yaml
-    """
+    """Run the API testcase described in the matching YAML file."""
     method = case.get("method", "GET")
     url = case["url"]
 

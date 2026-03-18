@@ -1,13 +1,9 @@
 # -*- coding: utf-8 -*-
-"""
-Excel 模板生成器：
-- 生成标准用例模板；
-- 便于统一维护字段与格式。
-"""
+"""Generate Excel templates for the single-source test data workbook."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 
@@ -31,42 +27,46 @@ DEFAULT_COLUMNS: List[str] = [
 
 
 def generate_excel_template(
-    output_path: Path, sheet_name: str = "cases", columns: List[str] = None
+    output_path: Path,
+    sheet_name: str = "cases",
+    columns: Optional[List[str]] = None,
 ) -> Path:
     """
-    生成 Excel 模板。
+    Create an empty Excel template.
 
-    :param output_path: 目标 Excel 路径
-    :param sheet_name: Sheet 名称
-    :param columns: 列定义，默认使用标准字段
-    :return: 生成的 Excel 路径
+    :param output_path: Output workbook path.
+    :param sheet_name: Initial sheet name.
+    :param columns: Column names for the first sheet.
+    :return: Created workbook path.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    cols = columns or DEFAULT_COLUMNS
-    df = pd.DataFrame(columns=cols)
-    df.to_excel(output_path, index=False, sheet_name=sheet_name)
+    dataframe = pd.DataFrame(columns=columns or DEFAULT_COLUMNS)
+    dataframe.to_excel(output_path, index=False, sheet_name=sheet_name)
     return output_path
 
 
 def generate_default_template() -> Path:
-    """
-    在 data/excel 下生成默认模板文件：api_cases.xlsx
-    """
+    """Create the default ``api_cases.xlsx`` template under ``data/excel``."""
     return generate_excel_template(settings.EXCEL_DIR / settings.EXCEL_MAIN)
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Excel 模板生成器")
+    parser = argparse.ArgumentParser(description="Generate an Excel template workbook.")
     parser.add_argument(
         "--path",
         type=str,
         default=str(settings.EXCEL_DIR / settings.EXCEL_MAIN),
-        help="模板输出路径",
+        help="Output workbook path.",
     )
-    parser.add_argument("--sheet", type=str, default="cases", help="Sheet 名称")
+    parser.add_argument(
+        "--sheet",
+        type=str,
+        default="cases",
+        help="Initial sheet name.",
+    )
     args = parser.parse_args()
 
     output = generate_excel_template(Path(args.path), sheet_name=args.sheet)
-    print(f"模板已生成：{output}")
+    print(f"generated: {output}")

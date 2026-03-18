@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-示例用例：消息列表查询
-- 数据来自 Excel → YAML；
-- 不感知登录与 Token 传递。
+Auto-generated testcase: test_message_list
+- Data source: data/yaml/test_message_list.yaml
 """
 from __future__ import annotations
 
@@ -13,11 +12,8 @@ from common.assertions import assert_response
 
 
 def test_message_list(case: Dict[str, Any], client: RequestClient) -> None:
-    """
-    YAML 驱动的测试用例示例：
-    - case 来自 data/yaml/test_message_list.yaml
-    """
-    method = case.get("method", "POST")
+    """Run the API testcase described in the matching YAML file."""
+    method = case.get("method", "GET")
     url = case["url"]
 
     response = client.request(

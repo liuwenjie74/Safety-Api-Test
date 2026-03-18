@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-日志工具：
-- 全局 logger 获取；
-- Token 脱敏过滤；
-- 避免明文输出敏感信息。
-"""
+"""Logging helpers with token masking."""
 from __future__ import annotations
 
 from typing import Any, Mapping
@@ -22,7 +17,7 @@ _TOKEN_PATTERNS = [
 
 
 def mask_value(value: str, visible: int = 4) -> str:
-    """对敏感值进行脱敏，仅保留前后可见位。"""
+    """Mask a sensitive value while preserving a small prefix and suffix."""
     if not value:
         return value
     if len(value) <= visible * 2:
@@ -31,7 +26,7 @@ def mask_value(value: str, visible: int = 4) -> str:
 
 
 def mask_headers(headers: Mapping[str, Any]) -> dict:
-    """脱敏 Header 中的 Token 信息。"""
+    """Mask token-like header values before logging or attaching them."""
     masked = dict(headers or {})
     token_key = settings.TOKEN_HEADER.lower()
     for key, value in list(masked.items()):
@@ -41,7 +36,7 @@ def mask_headers(headers: Mapping[str, Any]) -> dict:
 
 
 def mask_message(message: str) -> str:
-    """对字符串中的 token/authorization 进行脱敏处理。"""
+    """Mask token strings that appear in log messages."""
     result = message
     for pattern in _TOKEN_PATTERNS:
         result = pattern.sub(lambda m: m.group(1) + mask_value(m.group(2)), result)
@@ -49,36 +44,31 @@ def mask_message(message: str) -> str:
 
 
 class TokenMaskFilter(logging.Filter):
-    """日志脱敏过滤器。"""
+    """Filter that masks token values before records are emitted."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
-            msg = record.getMessage()
-            record.msg = mask_message(msg)
+            record.msg = mask_message(record.getMessage())
             record.args = ()
         except Exception:
-            # 失败时不影响日志输出
             pass
         return True
 
 
 def get_logger(name: str = "framework") -> logging.Logger:
-    """
-    获取统一 logger：
-    - 自动安装 Token 脱敏过滤器；
-    - 控制台输出。
-    """
+    """Return a configured logger with token masking enabled."""
     logger = logging.getLogger(name)
     if logger.handlers:
         return logger
 
     logger.setLevel(logging.INFO)
     handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    handler.setFormatter(
+        logging.Formatter(
+            fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
     )
-    handler.setFormatter(formatter)
     handler.addFilter(TokenMaskFilter())
     logger.addHandler(handler)
     logger.propagate = False
