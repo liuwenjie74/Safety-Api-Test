@@ -1,0 +1,44 @@
+name: api-test-ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          ENV: test
+          BASE_URL: ${{ secrets.BASE_URL }}
+          LOGIN_URL: ${{ secrets.LOGIN_URL }}
+          LOGIN_METHOD: ${{ secrets.LOGIN_METHOD }}
+          LOGIN_HEADERS: ${{ secrets.LOGIN_HEADERS }}
+          LOGIN_PAYLOAD: ${{ secrets.LOGIN_PAYLOAD }}
+          TOKEN_PATH: ${{ secrets.TOKEN_PATH }}
+          TOKEN_HEADER: ${{ secrets.TOKEN_HEADER }}
+          TOKEN_PREFIX: ${{ secrets.TOKEN_PREFIX }}
+        run: |
+          pytest -q --alluredir=allure-results
+
+      - name: Upload Allure Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results

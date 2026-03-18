@@ -1,0 +1,13 @@
+- id: login_001
+  name: ????????
+  method: POST
+  url: /api/common/sys/login
+  expected_status: 200
+  expected_code: 200
+  asserts:
+  - type: status_code
+    expected: 200
+  - type: json_path_eq
+    path: code
+    expected: 200
+  use_settings_login: true
